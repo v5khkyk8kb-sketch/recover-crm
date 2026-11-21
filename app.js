@@ -127,7 +127,7 @@ function pantallaLogin(msg) {
     h('button', { onclick: async () => {
       const { error } = await db.auth.signInWithOtp({ email: mail.value.trim(), options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true } });
       toast(error ? 'Error: ' + error.message : 'Listo, revisá tu mail y tocá el link');
-    } }, 'Mandarme el link')), msg ? h('p', { class: 'vacio' }, msg) : null);
+    } }, 'Mandarme el link')), ...(msg ? [h('p', { class: 'vacio' }, msg)] : []));
 }
 function cargarLocal() {
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
