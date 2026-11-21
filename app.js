@@ -524,6 +524,7 @@ function vMas(app) {
     h('label', {}, 'Tipo de cambio USD → pesos (para costo y ganancia de saunas)'), tc));
   app.append(h('h2', {}, 'Informe de migración'), h('div', { class: 'card' }, h('pre', {}, seed.informe)));
   app.append(h('h2', {}, 'Registro de actividad'), h('div', { class: 'card' }, S.auditoria.length ? S.auditoria.slice(-25).reverse().map(a => h('div', {}, h('small', {}, a.cuando + ' · ' + a.accion + ' #' + a.id + ' · ' + a.cambios.join(', ')))) : h('small', {}, 'Todavía no hiciste cambios.')));
+  if (db) return app.append(h('h2', {}, 'Datos'), h('div', { class: 'card' }, h('p', {}, 'Conectado a la base (Supabase): lo que cambiás se ve en la PC y en el celular.'), h('button', { class: 'sec', onclick: async () => { await db.auth.signOut(); location.reload(); } }, 'Cerrar sesión')));
   app.append(h('h2', {}, 'Datos'), h('div', { class: 'card' }, h('p', {}, 'Modo local: tus cambios se guardan solo en este navegador. Para usarlo desde el celular y con ayudante hay que conectar la base (Supabase).'),
     h('button', { class: 'bad', onclick: () => { if (confirm('Esto borra TUS cambios locales y vuelve a los datos migrados. ¿Seguro?')) { localStorage.removeItem(KEY); location.reload(); } } }, 'Borrar mis cambios locales')));
 }
