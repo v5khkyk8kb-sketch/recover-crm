@@ -4,7 +4,7 @@
    Qué es real hoy: todo lo que sale del historial migrado y de lo que cargues en el CRM.
    Qué todavía NO está conectado en vivo: recibir/mandar mensajes solos, Meta Ads, TikTok, Facebook (Fase 2/3/5). */
 
-const CANALES = { whatsapp: ['WhatsApp', 'message'], instagram: ['Instagram', 'instagram'], facebook: ['Facebook', 'facebook'], tiktok: ['TikTok', 'tiktok'], mail: ['Mail', 'mail'], telefono: ['Llamada', 'phone'], nota: ['Nota', 'sliders'] };
+const CANALES = { mercadolibre: ['Mercado Libre', 'cart'], whatsapp: ['WhatsApp', 'message'], instagram: ['Instagram', 'instagram'], facebook: ['Facebook', 'facebook'], tiktok: ['TikTok', 'tiktok'], mail: ['Mail', 'mail'], telefono: ['Llamada', 'phone'], nota: ['Nota', 'sliders'] };
 const icCanal = k => h('span', { class: 'canal-ic canal-' + k }, ico((CANALES[k] || [0, 'message'])[1], 16));
 const EN_VIVO = {}; // ningún canal está conectado en vivo todavía
 const CL = () => (S.claudio = S.claudio || { nombre: 'Claudio', res: {}, prio: {} });
@@ -93,7 +93,7 @@ function borrador(a) {
   return 'Buenas! Gracias por responder 🙌\n---\n¿Querés que te pase el catálogo con los precios?';
 }
 function canalPara(e, pref) {
-  if (pref && ['whatsapp', 'instagram', 'mail'].includes(pref)) return pref;
+  if (pref && ['whatsapp', 'instagram', 'mail', 'mercadolibre', 'facebook'].includes(pref)) return pref;
   if (e.telefono && e.telefono_tipo === 'movil' && !e.sin_whatsapp) return 'whatsapp';
   if (e.instagram) return 'instagram'; if (e.email) return 'mail'; return e.telefono ? 'whatsapp' : 'instagram';
 }
@@ -103,6 +103,8 @@ function abrirCanal(e, canal, texto) {
   if (canal === 'whatsapp' && e.telefono) return window.open('https://wa.me/' + soloDigitos(e.telefono) + '?text=' + encodeURIComponent(t), '_blank', 'noopener');
   if (canal === 'instagram' && e.instagram) { navigator.clipboard && navigator.clipboard.writeText(t).catch(() => {}); toast('Texto copiado: pegalo en el chat'); return window.open('https://ig.me/m/' + e.instagram, '_blank', 'noopener'); }
   if (canal === 'mail' && e.email) return window.open('mailto:' + e.email + '?subject=' + encodeURIComponent('Recover') + '&body=' + encodeURIComponent(t));
+  if (canal === 'mercadolibre') { navigator.clipboard && navigator.clipboard.writeText(t).catch(() => {}); toast('Texto copiado: pegalo en la respuesta de Mercado Libre'); return window.open('https://www.mercadolibre.com.uy/preguntas/vendedor', '_blank', 'noopener'); }
+  if (canal === 'facebook') { navigator.clipboard && navigator.clipboard.writeText(t).catch(() => {}); toast('Texto copiado: pegalo en la bandeja de Facebook'); return window.open('https://business.facebook.com/latest/inbox/all', '_blank', 'noopener'); }
   toast('Esta empresa no tiene ' + (CANALES[canal] || [canal])[0] + ' cargado');
 }
 function registrarEnvio(e, canal, texto, key) {
@@ -210,7 +212,7 @@ const idAviso = a => 'av-' + a.key.replace(/[^a-z0-9]/gi, '_');
 function tarjetaAviso(a) {
   const e = POR_ID.get(a.emp), blq = e && bloqueada(e);
   const ta = h('textarea', { rows: 3 }, borrador(a));
-  const canal = h('select', {}, ['whatsapp', 'instagram', 'mail'].map(k => h('option', { value: k, selected: k === (e ? canalPara(e, a.canal) : 'whatsapp') }, CANALES[k][0])));
+  const canal = h('select', {}, ['whatsapp', 'instagram', 'facebook', 'mercadolibre', 'mail'].map(k => h('option', { value: k, selected: k === (e ? canalPara(e, a.canal) : 'whatsapp') }, CANALES[k][0])));
   const prio = h('select', { onchange: ev => { CL().prio[a.key] = +ev.target.value; claudioGuardar(a.key); toast('Prioridad corregida'); ruta(); } }, NOM_P.map((x, i) => h('option', { value: i, selected: i === a.p }, 'Prioridad: ' + x)));
   return h('div', { class: 'card aviso p' + a.p, id: idAviso(a) },
     h('div', { class: 'row' }, chipP(a.p), a.corregida && h('span', { class: 'chip' }, 'corregida'), h('small', { class: 'sp' }, `${a.tipo}${a.canal && CANALES[a.canal] ? ' · ' + CANALES[a.canal][0] : ''} · ${hace(a.fecha)}`)),
@@ -246,7 +248,7 @@ function vRama(app, id) {
 
 /* bandeja unificada */
 let bandCanal = 'todos', bandQ = '', bandSolo = false, bandPag = 1;
-const POR_PAG = 50, CANALES_BANDEJA = ['todos', 'whatsapp', 'instagram', 'facebook', 'tiktok', 'mail', 'telefono'];
+const POR_PAG = 50, CANALES_BANDEJA = ['todos', 'whatsapp', 'instagram', 'facebook', 'mercadolibre', 'tiktok', 'mail', 'telefono'];
 function listaHilos(sel) {
   const todos = hilos(), cuenta = k => todos.filter(x => k === 'todos' || x.canales.includes(k)).length;
   const caja = h('div', { class: 'izq' }), lista = h('div'), info = h('small', { class: 'sp' });
@@ -294,7 +296,7 @@ function vHilo(app, id) {
   const caja = h('div', { class: 'chat' }, msgs.length ? msgs.map(burbuja) : h('p', { class: 'vacio' }, 'Sin mensajes todavía'));
   der.append(caja);
   const ta = h('textarea', { rows: 3, placeholder: blq ? 'Bloqueado' : 'Escribí la respuesta', disabled: blq });
-  const canal = h('select', { disabled: blq }, ['whatsapp', 'instagram', 'mail'].map(k => h('option', { value: k, selected: k === canalPara(e, hl && hl.ult.canal) }, CANALES[k][0])));
+  const canal = h('select', { disabled: blq }, ['whatsapp', 'instagram', 'facebook', 'mercadolibre', 'mail'].map(k => h('option', { value: k, selected: k === canalPara(e, hl && hl.ult.canal) }, CANALES[k][0])));
   const plant = h('select', { disabled: blq, onchange: ev => { if (ev.target.value) ta.value = PLANTILLAS[ev.target.value]; ev.target.value = ''; } }, h('option', { value: '' }, 'Respuestas rápidas…'), Object.keys(PLANTILLAS).map(k => h('option', { value: k }, k)));
   der.append(h('div', { class: 'card' }, ta, h('div', { class: 'row' }, plant, canal),
     h('div', { class: 'row' }, h('button', { disabled: blq, onclick: () => abrirCanal(e, canal.value, ta.value) }, 'Abrir y mandar'),
@@ -303,6 +305,44 @@ function vHilo(app, id) {
 }
 
 /* mails */
+/* mails de gente que todavía no está cargada como empresa */
+function vSinAsignar(app) {
+  const filas = (S.sinAsignar || []).slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  if (!filas.length) return app.append(vacio('No hay mails sin asignar', 'check'));
+  app.append(h('small', {}, 'Mails de personas que no están cargadas. Asignalos a una empresa (queda guardado ese mail para que la próxima vez entre solo) o descartalos.'));
+  filas.slice(0, 40).forEach(f => {
+    const q = h('input', { placeholder: 'Buscar empresa para asignar…', 'aria-label': 'Buscar empresa' }), res = h('div');
+    q.addEventListener('input', () => {
+      const t = q.value.trim().toLowerCase(); res.replaceChildren(); if (t.length < 2) return;
+      EMP.filter(e => (e.nombre + ' ' + (e.instagram || '') + ' ' + (e.email || '')).toLowerCase().includes(t)).slice(0, 5)
+        .forEach(e => res.append(h('button', { class: 'sec', style: 'width:100%;justify-content:flex-start;margin-top:6px', onclick: () => asignarMail(f, e) }, e.nombre + ' · ' + e.etapa)));
+    });
+    app.append(h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', { class: 'sp' }, f.contraparte), h('small', {}, (f.direccion === 'in' ? 'recibido' : 'enviado') + ' · ' + fmtF(f.fecha))),
+      h('small', {}, (f.asunto || '') + (f.resumen ? ' — ' + f.resumen.slice(0, 120) : '')), q, res,
+      h('button', { class: 'bad', style: 'margin-top:8px', onclick: () => descartarMail(f) }, 'Descartar')));
+  });
+  if (filas.length > 40) app.append(h('p', { class: 'vacio' }, `Mostrando 40 de ${filas.length}`));
+}
+async function asignarMail(f, e) {
+  if (!db) return toast('Solo disponible conectado a la base');
+  const dir = f.direccion === 'in' ? 'in' : 'out', resumen = ((f.asunto || '') + (f.resumen ? ' — ' + f.resumen : '')).slice(0, 300);
+  const ins = await db.from('mensajes').insert({ empresa_id: e.id, canal: 'mail', direccion: dir, fecha: f.fecha, resumen, cuerpo: f.cuerpo, origen: 'gmail-sync', externo_id: f.externo_id, historico: false }).select('id').single();
+  if (ins.error) return toast('No se pudo asignar: ' + ins.error.message);
+  const del = await db.from('mensajes_sin_asignar').delete().eq('id', f.id);
+  if (del.error) toast('Se asignó, pero no pude limpiar la lista: ' + del.error.message);
+  const extra = [...(e.emails_extra || [])]; if (e.email !== f.contraparte && !extra.includes(f.contraparte)) extra.push(f.contraparte);
+  cambiar(e.id, { emails_extra: extra }, ['emails_extra']);
+  S.mensajes.push({ id: ins.data.id, empresa_id: e.id, canal: 'mail', direccion: dir, fecha: f.fecha, resumen });
+  S.sinAsignar = S.sinAsignar.filter(x => x.id !== f.id);
+  toast('Asignado a ' + e.nombre); ruta();
+}
+async function descartarMail(f) {
+  if (!db || !confirm('¿Descartar este mail? No se puede deshacer.')) return;
+  const { error } = await db.from('mensajes_sin_asignar').delete().eq('id', f.id);
+  if (error) return toast('No se pudo descartar: ' + error.message);
+  S.sinAsignar = S.sinAsignar.filter(x => x.id !== f.id); toast('Descartado'); ruta();
+}
+
 function vMails(app, arg) {
   const tab = arg || 'enviados', ms = todosMsgs().filter(m => m.canal === 'mail' && POR_ID.has(m.empresa_id));
   const enviados = ms.filter(m => dirEf(m) === 'out'), recib = ms.filter(m => dirEf(m) === 'in');
@@ -311,7 +351,9 @@ function vMails(app, arg) {
   const sinResp = [...empEnv].filter(i => !respondieron.has(i) && atendible(POR_ID.get(i)));
   const rebotados = EMP.filter(e => e.mail_invalido).length;
   app.append(h('h2', {}, 'Mails'), h('div', { class: 'kpis' }, kpi(enviados.length, 'mails enviados'), kpi(respondieron.size, 'empresas que respondieron'), kpi(ult24 + ' / ~95', 'enviados en 24 h (cupo Gmail)'), kpi(rebotados, 'mails que rebotaron')));
-  app.append(h('div', { class: 'row' }, [['enviados', 'Enviados'], ['respuestas', 'Respuestas'], ['sinrespuesta', 'Sin respuesta']].map(([k, n]) => h('a', { class: 'btn ' + (tab === k ? '' : 'sec'), href: '#/mails/' + k }, n))));
+  const hayBuzon = Array.isArray(S.sinAsignar), nSin = hayBuzon ? S.sinAsignar.length : 0;
+  app.append(h('div', { class: 'row' }, [['enviados', 'Enviados'], ['respuestas', 'Respuestas'], ['sinrespuesta', 'Sin respuesta']].concat(hayBuzon ? [['sinasignar', 'Sin asignar' + (nSin ? ' (' + nSin + ')' : '')]] : []).map(([k, n]) => h('a', { class: 'btn ' + (tab === k ? '' : 'sec'), href: '#/mails/' + k }, n))));
+  if (tab === 'sinasignar' && hayBuzon) return vSinAsignar(app);
   const fila = (m, nota) => { const e = POR_ID.get(m.empresa_id); return h('a', { class: 'card item', href: '#/hilo/' + e.id }, h('b', {}, e.nombre), h('small', {}, [fmtF(m.fecha), e.email, nota || m.resumen].filter(Boolean).join(' · '))); };
   const lista = tab === 'respuestas' ? recib.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).map(m => fila(m))
     : tab === 'sinrespuesta' ? sinResp.map(i => { const m = enviados.filter(x => x.empresa_id === i).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))[0]; return fila(m, 'sin respuesta ' + hace(m.fecha)); })
@@ -319,7 +361,7 @@ function vMails(app, arg) {
   if (!lista.length) app.append(h('p', { class: 'vacio' }, 'Nada para mostrar'));
   lista.slice(0, 60).forEach(x => app.append(x));
   if (lista.length > 60) app.append(h('p', { class: 'vacio' }, `Mostrando 60 de ${lista.length}`));
-  app.append(h('small', {}, 'Los envíos automáticos los hace el Apps Script de Gmail; el CRM muestra lo que quedó registrado. Para que los mails nuevos entren solos hay que conectar Gmail (Fase 2).'));
+  app.append(h('small', {}, 'Gmail está conectado: el Apps Script de la cuenta de banerasdeportistas sincroniza los mails con el CRM cada hora y los asigna por mail exacto.'));
 }
 
 /* instagram: lo real es el control de DMs por día */

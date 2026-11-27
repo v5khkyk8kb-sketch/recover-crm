@@ -154,7 +154,7 @@ details summary{cursor:pointer;font-weight:600;min-height:32px}
 .burbuja{max-width:88%;padding:8px 12px;border-radius:16px;background:var(--surface);border:1px solid var(--border)}.burbuja small{display:block;font-size:11px}
 .burbuja.out{align-self:flex-end;background:var(--brand-soft);border-color:transparent}.burbuja.in{align-self:flex-start}.burbuja.int{align-self:center;opacity:.85;font-size:13px}
 .canal-ic{display:inline-flex;vertical-align:middle;margin-right:2px}
-.canal-whatsapp{color:#25a35a}.canal-instagram{color:#d6336c}.canal-facebook{color:#1877f2}.canal-tiktok{color:var(--text)}.canal-mail{color:var(--text-2)}.canal-telefono{color:var(--brand)}
+.canal-whatsapp{color:#25a35a}.canal-instagram{color:#d6336c}.canal-facebook{color:#1877f2}.canal-tiktok{color:var(--text)}.canal-mail{color:var(--text-2)}.canal-telefono{color:var(--brand)}.canal-mercadolibre{color:#b58900}
 .barra{display:grid;grid-template-columns:44px 1fr 28px;gap:8px;align-items:center;margin:4px 0}
 .tira{background:var(--surface-2);border-radius:6px;height:12px;overflow:hidden}.tira i{display:block;height:100%;background:var(--brand);transition:width .4s}.tira i.ojo{background:var(--warn)}.tira i.mal{background:var(--bad)}
 ol{padding-left:20px;margin:6px 0}

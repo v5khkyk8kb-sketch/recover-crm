@@ -126,14 +126,14 @@ function claudioDesdeBase(filas, config, local) {
 }
 async function cargarDesdeBase() {
   $('#app').replaceChildren(esqueleto(4));
-  const [empresas, tareas, mensajes, cotizaciones, ventas, config, claudioFilas] = await Promise.all([
+  const [empresas, tareas, mensajes, cotizaciones, ventas, config, claudioFilas, sinAsignar] = await Promise.all([
     traerTodo('empresas', 'id,nombre,rubro,departamento,localidad,direccion,telefono,telefono_tipo,telefonos_extra,instagram,email,emails_extra,web,google_maps,resenas,prioridad,origen,etapa,canales_usados,primer_contacto,ultimo_contacto,notas,historial_resumen,no_contactar,no_contactar_motivo,no_contactar_fecha,cliente,segmento_gabriel,sin_whatsapp,mail_invalido,etiquetas,nombres_fusionados,valor_estimado'),
-    traerTodo('tareas'), traerTodo('mensajes', 'id,empresa_id,canal,direccion,fecha,resumen'), traerTodo('cotizaciones'), traerTodo('ventas'), traerTodo('config', '*', 'clave'), traerTodo('claudio_estado', '*', 'clave').catch(() => null)]);
+    traerTodo('tareas'), traerTodo('mensajes', 'id,empresa_id,canal,direccion,fecha,resumen'), traerTodo('cotizaciones'), traerTodo('ventas'), traerTodo('config', '*', 'clave'), traerTodo('claudio_estado', '*', 'clave').catch(() => null), traerTodo('mensajes_sin_asignar', '*', 'id').catch(() => null)]);
   const fecha = v => v && String(v).replace('T', ' ').slice(0, 16);
   seed = { empresas: empresas.map(e => sinNulos({ ...e, primer_contacto: fecha(e.primer_contacto), ultimo_contacto: fecha(e.ultimo_contacto) })), mensajes: [], tareas: [], etapas: [],
     informe: 'Datos desde Supabase. El informe de la migración está en crm/migracion/salida/informe.md.' };
   let loc = {}; try { loc = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
-  S = { patch: {}, nuevas: [], auditoria: [], filtros: loc.filtros || {}, segmentos: loc.segmentos || [], claudio: claudioDesdeBase(claudioFilas, config, loc.claudio),
+  S = { patch: {}, nuevas: [], auditoria: [], filtros: loc.filtros || {}, segmentos: loc.segmentos || [], claudio: claudioDesdeBase(claudioFilas, config, loc.claudio), sinAsignar: sinAsignar,
     tareas: tareas.map(t => ({ ...t, hora: t.hora && t.hora.slice(0, 5) })), mensajes: mensajes.map(m => ({ ...m, fecha: fecha(m.fecha) })),
     cotizaciones: cotizaciones.map(c => ({ ...c, desc: +c.descuento, total: +c.total })), ventas: ventas.map(v => ({ ...v, total: +v.total, costo: v.costo == null ? null : +v.costo, ganancia: v.ganancia == null ? null : +v.ganancia })),
     config: { tc: (config.find(c => c.clave === 'tc') || {}).valor ?? null } };
