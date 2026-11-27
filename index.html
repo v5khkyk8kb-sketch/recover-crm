@@ -6,21 +6,34 @@
 <meta name="theme-color" content="#0b3a5b">
 <title>Recover CRM</title>
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Recover">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header id="top"><h1>Recover</h1><span id="sub"></span></header>
-<main id="app"><p class="vacio">Cargando…</p></main>
-<nav id="tabs">
-  <a href="#/hoy" data-t="hoy">Hoy</a>
-  <a href="#/contactos" data-t="contactos">Contactos</a>
-  <a href="#/pipeline" data-t="pipeline">Pipeline</a>
-  <a href="#/tareas" data-t="tareas">Tareas</a>
-  <a href="#/mas" data-t="mas">Más</a>
-</nav>
-<div id="toast"></div>
+<a class="salto" href="#app" onclick="document.getElementById('app').focus()">Saltar al contenido</a>
+<aside id="lateral" aria-label="Menú principal">
+  <nav id="menu-items" aria-label="Secciones"></nav>
+  <div id="pie"><div id="pie-acciones" class="row"></div><span id="sub"></span></div>
+</aside>
+<div id="velo" onclick="cerrarMenu()"></div>
+<header id="top">
+  <button id="menubtn" aria-label="Abrir menú" aria-expanded="false" aria-controls="lateral" onclick="abrirMenu()"></button>
+  <a href="#/hoy" id="logo-link" aria-label="Recover, ir a Hoy"><img src="logo.png" id="logo" alt="Recover"></a>
+  <span id="tit"></span><span class="sp"></span>
+  <button id="buscarbtn" aria-label="Buscar (Cmd+K)" onclick="abrirPaleta()"></button>
+</header>
+<main id="app" tabindex="-1"><div class="esq" role="status" aria-busy="true" aria-label="Cargando"><div class="esq-b"></div><div class="esq-b"></div><div class="esq-b"></div></div></main>
+<nav id="tabs" aria-label="Accesos rápidos"></nav>
+<div id="toast" role="status" aria-live="polite"></div>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="app.js"></script>
+<script src="ui.js"></script>
+<script src="secciones.js"></script>
 </body>
 </html>

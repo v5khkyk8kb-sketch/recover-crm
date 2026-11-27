@@ -67,7 +67,7 @@ const dias = f => Math.round((new Date(hoy() + 'T12:00:00') - new Date(f.slice(0
 let db = null;
 const CFG = window.RECOVER_CFG || {};
 function guardar() {
-  try { localStorage.setItem(KEY, JSON.stringify(db ? { filtros: S.filtros, segmentos: S.segmentos } : S)); } catch (e) { toast('No pude guardar en este navegador'); }
+  try { localStorage.setItem(KEY, JSON.stringify(db ? { filtros: S.filtros, segmentos: S.segmentos, claudio: S.claudio } : S)); } catch (e) { toast('No pude guardar en este navegador'); }
   if (db) sincronizar();
 }
 /* --- Supabase: se sube solo lo que cambió (tareas, mensajes, cotizaciones, ventas, config) --- */
@@ -105,16 +105,35 @@ async function traerTodo(tabla, cols = '*', orden = 'id') {
   }
 }
 const sinNulos = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== false && !(Array.isArray(v) && !v.length)));
+/* Estado de Claudio: la base manda; lo que ya tenías guardado solo en este navegador se sube una vez. */
+function claudioDesdeBase(filas, config, local) {
+  const nombreBase = (config.find(c => c.clave === 'claudio_nombre') || {}).valor;
+  const c = { nombre: nombreBase || (local && local.nombre) || 'Claudio', res: {}, prio: {}, enBase: filas !== null };
+  (filas || []).forEach(r => {
+    if (r.estado) c.res[r.clave] = { est: r.estado, hasta: r.hasta, fecha: r.actualizado };
+    if (r.prio !== null && r.prio !== undefined) c.prio[r.clave] = r.prio;
+  });
+  if (filas !== null && local) {   // subir una sola vez lo que había solo en este navegador
+    const subir = [], claves = new Set([...Object.keys(local.res || {}), ...Object.keys(local.prio || {})]);
+    claves.forEach(k => { if (!(k in c.res) && !(k in c.prio)) {
+      const r = (local.res || {})[k], p = (local.prio || {})[k];
+      if (r) c.res[k] = r; if (p !== undefined) c.prio[k] = p;
+      subir.push({ clave: k, estado: r ? r.est : null, hasta: r ? r.hasta || null : null, prio: p === undefined ? null : p });
+    } });
+    if (subir.length) db.from('claudio_estado').upsert(subir).then(({ error }) => error && console.error('claudio_estado', error));
+  }
+  return c;
+}
 async function cargarDesdeBase() {
-  $('#app').replaceChildren(h('p', { class: 'vacio' }, 'Cargando desde la base…'));
-  const [empresas, tareas, mensajes, cotizaciones, ventas, config] = await Promise.all([
+  $('#app').replaceChildren(esqueleto(4));
+  const [empresas, tareas, mensajes, cotizaciones, ventas, config, claudioFilas] = await Promise.all([
     traerTodo('empresas', 'id,nombre,rubro,departamento,localidad,direccion,telefono,telefono_tipo,telefonos_extra,instagram,email,emails_extra,web,google_maps,resenas,prioridad,origen,etapa,canales_usados,primer_contacto,ultimo_contacto,notas,historial_resumen,no_contactar,no_contactar_motivo,no_contactar_fecha,cliente,segmento_gabriel,sin_whatsapp,mail_invalido,etiquetas,nombres_fusionados,valor_estimado'),
-    traerTodo('tareas'), traerTodo('mensajes', 'id,empresa_id,canal,direccion,fecha,resumen'), traerTodo('cotizaciones'), traerTodo('ventas'), traerTodo('config', '*', 'clave')]);
+    traerTodo('tareas'), traerTodo('mensajes', 'id,empresa_id,canal,direccion,fecha,resumen'), traerTodo('cotizaciones'), traerTodo('ventas'), traerTodo('config', '*', 'clave'), traerTodo('claudio_estado', '*', 'clave').catch(() => null)]);
   const fecha = v => v && String(v).replace('T', ' ').slice(0, 16);
   seed = { empresas: empresas.map(e => sinNulos({ ...e, primer_contacto: fecha(e.primer_contacto), ultimo_contacto: fecha(e.ultimo_contacto) })), mensajes: [], tareas: [], etapas: [],
     informe: 'Datos desde Supabase. El informe de la migración está en crm/migracion/salida/informe.md.' };
   let loc = {}; try { loc = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
-  S = { patch: {}, nuevas: [], auditoria: [], filtros: loc.filtros || {}, segmentos: loc.segmentos || [],
+  S = { patch: {}, nuevas: [], auditoria: [], filtros: loc.filtros || {}, segmentos: loc.segmentos || [], claudio: claudioDesdeBase(claudioFilas, config, loc.claudio),
     tareas: tareas.map(t => ({ ...t, hora: t.hora && t.hora.slice(0, 5) })), mensajes: mensajes.map(m => ({ ...m, fecha: fecha(m.fecha) })),
     cotizaciones: cotizaciones.map(c => ({ ...c, desc: +c.descuento, total: +c.total })), ventas: ventas.map(v => ({ ...v, total: +v.total, costo: v.costo == null ? null : +v.costo, ganancia: v.ganancia == null ? null : +v.ganancia })),
     config: { tc: (config.find(c => c.clave === 'tc') || {}).valor ?? null } };
@@ -122,12 +141,23 @@ async function cargarDesdeBase() {
   VISTO.tc = JSON.stringify(S.config.tc ?? null);
 }
 function pantallaLogin(msg) {
+  document.body.classList.add('login');
   const mail = h('input', { type: 'email', placeholder: 'tu mail', autocomplete: 'email' });
-  $('#app').replaceChildren(h('h2', {}, 'Entrar'), h('div', { class: 'card' }, h('p', {}, 'Te mando un link al mail para entrar (sin contraseña). Solo funcionan los mails autorizados.'), mail,
-    h('button', { onclick: async () => {
-      const { error } = await db.auth.signInWithOtp({ email: mail.value.trim(), options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true } });
-      toast(error ? 'Error: ' + error.message : 'Listo, revisá tu mail y tocá el link');
-    } }, 'Mandarme el link')), ...(msg ? [h('p', { class: 'vacio' }, msg)] : []));
+  const mail2 = h('input', { type: 'email', placeholder: 'tu mail', autocomplete: 'username' });
+  const clave = h('input', { type: 'password', placeholder: 'tu contraseña', autocomplete: 'current-password' });
+  const entrar = async () => {
+    const { error } = await db.auth.signInWithPassword({ email: mail2.value.trim(), password: clave.value });
+    if (error) return toast('No pude entrar: ' + error.message);
+    location.reload();
+  };
+  clave.addEventListener('keydown', ev => { if (ev.key === 'Enter') entrar(); });
+  $('#app').replaceChildren(h('h2', {}, 'Entrar'),
+    h('div', { class: 'card' }, h('b', {}, 'Con contraseña'), h('small', {}, 'La contraseña la definís en Supabase (Authentication → Users). Solo entran los mails autorizados.'), mail2, clave, h('button', { onclick: entrar }, 'Entrar')),
+    h('div', { class: 'card' }, h('b', {}, 'Con link al mail'), h('small', {}, 'Supabase limita los mails gratis a unos pocos por hora: si dice "rate limit", esperá o usá la contraseña.'), mail,
+      h('button', { class: 'sec', onclick: async () => {
+        const { error } = await db.auth.signInWithOtp({ email: mail.value.trim(), options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true } });
+        toast(error ? 'Error: ' + error.message : 'Listo, revisá tu mail y tocá el link');
+      } }, 'Mandarme el link')), ...(msg ? [h('p', { class: 'vacio' }, msg)] : []));
 }
 function cargarLocal() {
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
@@ -190,8 +220,7 @@ function moverEtapa(e, etapa) {
 const VISTAS = { hoy: vHoy, contactos: vContactos, pipeline: vPipeline, tareas: vTareas, mas: vMas, empresa: vEmpresa, cotizar: vCotizar, ventas: vVentas };
 function ruta() {
   const [, v = 'hoy', arg] = location.hash.split('/');
-  const tab = { empresa: 'contactos', cotizar: 'contactos', ventas: 'mas' }[v] || v;
-  document.querySelectorAll('#tabs a').forEach(a => a.classList.toggle('on', a.dataset.t === tab));
+  if (window.marcarMenu) marcarMenu(v);
   const app = $('#app'); app.replaceChildren();
   (VISTAS[v] || vHoy)(app, arg); window.scrollTo(0, 0);
 }
@@ -210,12 +239,13 @@ function tareaFila(t, conEmpresa = true) {
   return h('div', { class: 'card ' + (t.vence && d > 0 ? 'venc' : t.vence && d === 0 ? 'hoyc' : '') },
     h('div', { class: 'row' },
       h('div', { class: 'sp' }, h('b', {}, t.titulo), h('small', {}, [t.vence && fmtF(t.vence) + (d > 0 ? ` (venció hace ${d} d)` : d === 0 ? ' (hoy)' : ''), t.hora, t.tipo].filter(Boolean).join(' · '))),
-      h('button', { class: 'ok', onclick: () => { t.hecha = true; guardar(); toast('Hecha'); ruta(); } }, '✓')),
+      h('button', { class: 'ok icon', 'aria-label': 'Marcar como hecha', onclick: () => { t.hecha = true; guardar(); toast('Hecha'); ruta(); } }, ico('check'))),
     t.detalle && h('small', {}, t.detalle),
     conEmpresa && e && h('div', {}, h('a', { href: '#/empresa/' + e.id }, e.nombre), ' ', bloqueada(e) && h('span', { class: 'chip nc' }, 'No contactar')));
 }
 
 function vHoy(app) {
+  app.append(h('div', { class: 'saludo' }, h('h2', {}, saludo()), h('p', {}, fechaLarga())));
   const t = hoy(), pend = S.tareas.filter(x => !x.hecha).sort((a, b) => (a.vence || '9').localeCompare(b.vence || '9'));
   const venc = pend.filter(x => x.vence && x.vence < t), deHoy = pend.filter(x => x.vence === t);
   const resp = EMP.filter(e => e.etapa === 'Respondió' && !e.no_contactar);
@@ -223,15 +253,16 @@ function vHoy(app) {
   const vHoyL = S.ventas.filter(v => v.fecha === t && v.estado !== 'Cancelado');
   const faltaPago = S.ventas.filter(v => v.estado === 'Falta pago').length;
   app.append(h('div', { class: 'kpis' },
-    kpi(venc.length, 'seguimientos vencidos'), kpi(deHoy.length, 'tareas de hoy'),
-    kpi(resp.length, 'respondieron (a atender)'), kpi(nPend, 'con catálogo u oferta'),
-    kpi(vHoyL.length ? pesos(vHoyL.reduce((a, v) => a + v.total, 0)) : '0', 'ventas de hoy'), kpi(faltaPago, 'ventas con falta de pago')));
-  app.append(h('h2', {}, 'Vencidos'), ...(venc.length ? venc.map(x => tareaFila(x)) : [h('p', { class: 'vacio' }, 'Nada vencido 🎉')]));
-  app.append(h('h2', {}, 'Hoy'), ...(deHoy.length ? deHoy.map(x => tareaFila(x)) : [h('p', { class: 'vacio' }, 'Nada para hoy')]));
+    kpi(venc.length, 'seguimientos vencidos', venc.length ? 'bad' : 'ok', '#/tareas'), kpi(deHoy.length, 'tareas de hoy', deHoy.length ? 'warn' : '', '#/tareas'),
+    kpi(resp.length, 'respondieron (a atender)', resp.length ? 'warn' : '', '#/claudio'), kpi(nPend, 'con catálogo u oferta', '', '#/pipeline'),
+    kpi(vHoyL.length ? pesos(vHoyL.reduce((a, v) => a + v.total, 0)) : '0', 'ventas de hoy'), kpi(faltaPago, 'ventas con falta de pago', faltaPago ? 'bad' : '', '#/ventas')));
+  if (window.franjaClaudio) app.append(franjaClaudio());
+  app.append(h('h2', {}, 'Vencidos'), ...(venc.length ? venc.map(x => tareaFila(x)) : [vacio('Nada vencido', 'check')]));
+  app.append(h('h2', {}, 'Hoy'), ...(deHoy.length ? deHoy.map(x => tareaFila(x)) : [vacio('Nada para hoy', 'calendar')]));
   app.append(h('h2', {}, 'Respondieron — esperan respuesta'), ...resp.slice(0, 15).map(tarjeta));
   if (resp.length > 15) app.append(h('a', { href: '#/pipeline' }, `Ver las ${resp.length} en el pipeline`));
 }
-const kpi = (n, l) => h('div', { class: 'kpi' }, h('b', {}, n), h('small', {}, l));
+const kpi = (n, l, tono = '', href) => h(href ? 'a' : 'div', { class: 'kpi ' + tono, href }, h('b', {}, n), h('small', {}, l));
 
 /* ---- contactos ---- */
 const LIM = 40;
@@ -252,7 +283,7 @@ function vContactos(app) {
     h('div', {}, marcas),
     h('label', { class: 'row' }, gab, 'Ocultar segmento de Gabriel')),
     h('div', { class: 'row' }, cont, h('span', { class: 'sp' }),
-      h('button', { class: 'sec', onclick: guardarSegmento }, '★ Guardar filtro'), h('button', { class: 'sec', onclick: exportarCSV }, 'Excel (CSV)')),
+      h('button', { class: 'sec', onclick: guardarSegmento }, ico('star', 18), ' Guardar filtro'), h('button', { class: 'sec', onclick: exportarCSV }, 'Excel (CSV)')),
     segmentosUI(), out);
   function filtrar() {
     const qq = F.q.trim().toLowerCase().replace(/^@/, ''), qd = qq.replace(/\D/g, '');
@@ -295,23 +326,23 @@ function vContactos(app) {
 }
 function segmentosUI() {
   if (!S.segmentos.length) return h('span');
-  return h('div', {}, S.segmentos.map((s, i) => h('span', { class: 'chip', onclick: () => { S.filtros = { ...s.f }; guardar(); ruta(); }, oncontextmenu: ev => { ev.preventDefault(); if (confirm('Borrar segmento ' + s.n + '?')) { S.segmentos.splice(i, 1); guardar(); ruta(); } } }, '★ ' + s.n)));
+  return h('div', {}, S.segmentos.map((s, i) => h('span', { class: 'chip', onclick: () => { S.filtros = { ...s.f }; guardar(); ruta(); }, oncontextmenu: ev => { ev.preventDefault(); if (confirm('Borrar segmento ' + s.n + '?')) { S.segmentos.splice(i, 1); guardar(); ruta(); } } }, s.n)));
 }
 
 /* ---- ficha ---- */
 function vEmpresa(app, id) {
   const e = POR_ID.get(+id); if (!e) return app.append(h('p', { class: 'vacio' }, 'No encontré esa empresa'));
-  app.append(h('a', { href: '#/contactos' }, '← Contactos'), h('h2', {}, e.nombre), h('div', {}, chips(e)));
-  if (e.no_contactar) app.append(h('div', { class: 'banner bad' }, '🚫 No contactar: ' + (e.no_contactar_motivo || 'sin motivo') + (e.no_contactar_fecha ? ' (' + e.no_contactar_fecha + ')' : ''), h('br'),
-    'No se generan seguimientos ni envíos para esta empresa.'));
+  app.append(volver('#/contactos', 'Contactos'), h('h2', {}, e.nombre), h('div', {}, chips(e)));
+  if (e.no_contactar) app.append(h('div', { class: 'banner bad', role: 'alert' }, ico('ban', 20), h('div', {}, 'No contactar: ' + (e.no_contactar_motivo || 'sin motivo') + (e.no_contactar_fecha ? ' (' + e.no_contactar_fecha + ')' : ''), h('br'),
+    'No se generan seguimientos ni envíos para esta empresa.')));
   if (e.segmento_gabriel && !e.cliente) app.append(h('div', { class: 'banner warn' }, 'Segmento de Gabriel (socio): no va en tu prospección.'));
   if ((e.etiquetas || []).includes('revisar-motivo')) app.append(h('div', { class: 'banner warn' }, 'Está en no-contactar sin motivo: ¿cliente cerrado o dijo que no? Corregilo abajo.'));
   const tel = e.telefono, wa = tel && tel.replace('+', '');
   const acciones = h('div', { class: 'row' },
-    tel && h('a', { class: 'btn sec', href: 'tel:' + tel }, '📞 Llamar'),
+    tel && h('a', { class: 'btn sec', href: 'tel:' + tel }, ico('phone', 18), ' Llamar'),
     tel && e.telefono_tipo === 'movil' && !e.no_contactar && !e.sin_whatsapp && h('a', { class: 'btn', href: 'https://wa.me/' + wa, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
     e.instagram && !e.no_contactar && h('a', { class: 'btn sec', href: 'https://instagram.com/' + e.instagram, target: '_blank', rel: 'noopener' }, '@' + e.instagram),
-    e.email && !e.no_contactar && h('a', { class: 'btn sec', href: 'mailto:' + e.email }, '✉ Mail'));
+    e.email && !e.no_contactar && h('a', { class: 'btn sec', href: 'mailto:' + e.email }, ico('mail', 18), ' Mail'));
   app.append(h('div', { class: 'card' }, acciones, e.no_contactar && h('small', {}, 'Botones de mensaje ocultos por la marca No contactar.')));
 
   const dato = (k, v) => v ? h('div', { class: 'dato' }, h('span', {}, k), h('span', {}, v)) : null;
@@ -325,7 +356,7 @@ function vEmpresa(app, id) {
   const selE = h('select', { onchange: ev => { moverEtapa(e, ev.target.value); ruta(); } }, ETAPAS.map(x => h('option', { value: x, selected: x === e.etapa }, x)));
   app.append(h('h3', {}, 'Pipeline'), h('div', { class: 'card' }, selE, h('small', {}, 'Cada etapa programa su seguimiento solo. "Perdido" pide motivo.'),
     e.valor_estimado && h('div', { class: 'dato' }, h('span', {}, 'Valor estimado'), h('span', {}, pesos(e.valor_estimado))),
-    h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/cotizar/' + e.id }, '🧾 Cotizar / registrar venta'))));
+    h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/cotizar/' + e.id }, ico('receipt', 18), ' Cotizar / registrar venta'))));
   const cots = S.cotizaciones.filter(c => c.empresa_id === e.id), vts = S.ventas.filter(v => v.empresa_id === e.id);
   if (cots.length || vts.length) app.append(h('h3', {}, 'Cotizaciones y ventas'),
     ...cots.slice().reverse().map(c => h('div', { class: 'card' }, h('small', {}, fmtF(c.fecha) + ' · cotización · ' + c.desc + '% off'), h('div', {}, resumenItems(c.items) + ' — ' + pesos(c.total)),
@@ -362,7 +393,7 @@ function vPipeline(app) {
   const k = h('div', { class: 'kanban' });
   ETAPAS.filter(x => x !== 'Lead').forEach(et => {
     const l = EMP.filter(e => e.etapa === et && !(e.segmento_gabriel && S.filtros.gabriel !== false)).sort((a, b) => (b.ultimo_contacto || '').localeCompare(a.ultimo_contacto || ''));
-    const col = h('div', { class: 'col' }, h('h4', {}, et, h('span', {}, l.length)));
+    const col = h('div', { class: 'col', 'data-e': et }, h('h4', {}, et, h('span', {}, l.length)));
     l.slice(0, 25).forEach(e => col.append(h('div', { class: 'card' }, h('a', { class: 'item', href: '#/empresa/' + e.id }, h('b', {}, e.nombre), h('small', {}, [e.rubro, e.ultimo_contacto && 'últ. ' + fmtF(e.ultimo_contacto)].filter(Boolean).join(' · '))),
       !['Ganado', 'Perdido'].includes(et) && h('div', { class: 'row' },
         h('button', { class: 'sec', onclick: () => { const i = ETAPAS.indexOf(et); moverEtapa(e, ETAPAS[i + 1]); ruta(); } }, '→ ' + ETAPAS[ETAPAS.indexOf(et) + 1])))));
@@ -399,8 +430,8 @@ function vCotizar(app, arg) {
   if (!e) return app.append(h('p', { class: 'vacio' }, 'No encontré esa empresa'));
   const previa = qs && S.cotizaciones.find(c => String(c.id) === new URLSearchParams(qs).get('c'));
   const C = previa ? JSON.parse(JSON.stringify(previa)) : { items: [{ c: 'PIS-PRE', q: 1 }], desc: '', entrega: ENTREGAS[0], pago: PAGOS[0], nota: '' };
-  app.append(h('a', { href: '#/empresa/' + e.id }, '← ' + e.nombre), h('h2', {}, 'Cotizar'));
-  if (e.no_contactar) app.append(h('div', { class: 'banner bad' }, '🚫 Está en No contactar (' + (e.no_contactar_motivo || 'sin motivo') + '). Podés registrar una venta si te escribió él, pero no se envía nada desde acá.'));
+  app.append(volver('#/empresa/' + e.id, e.nombre), h('h2', {}, 'Cotizar'));
+  if (e.no_contactar) app.append(h('div', { class: 'banner bad', role: 'alert' }, ico('ban', 20), h('div', {}, 'Está en No contactar (' + (e.no_contactar_motivo || 'sin motivo') + '). Podés registrar una venta si te escribió él, pero no se envía nada desde acá.')));
   const lineas = h('div'), res = h('div', { class: 'card' }), descI = h('input', { type: 'number', min: 0, max: 20, placeholder: 'auto', value: C.desc, oninput: ev => { C.desc = ev.target.value; pintar(); } });
   const selF = (vals, k) => h('select', { onchange: ev => { C[k] = ev.target.value; pintar(); } }, vals.map(v => h('option', { value: v, selected: C[k] === v }, v)));
   const notaI = h('input', { placeholder: 'Nota (opcional)', value: C.nota, oninput: ev => { C.nota = ev.target.value; pintar(); } });
@@ -408,7 +439,7 @@ function vCotizar(app, arg) {
     lineas.replaceChildren(...C.items.map((it, i) => h('div', { class: 'row' },
       h('select', { class: 'sp', onchange: ev => { it.c = ev.target.value; pintar(); } }, PRODUCTOS.filter(p => !p.sinStock || p.c === it.c).map(p => h('option', { value: p.c, selected: p.c === it.c }, p.n + ' — ' + pesos(p.p)))),
       h('input', { type: 'number', min: 1, value: it.q, style: 'width:70px', oninput: ev => { it.q = Math.max(0, +ev.target.value || 0); pintar(); } }),
-      h('button', { class: 'sec', onclick: () => { C.items.splice(i, 1); pintarLineas(); pintar(); } }, '✕'))),
+      h('button', { class: 'sec icon', 'aria-label': 'Quitar producto', onclick: () => { C.items.splice(i, 1); pintarLineas(); pintar(); } }, ico('x', 18)))),
       h('button', { class: 'sec', onclick: () => { C.items.push({ c: 'PIS-PRE', q: 1 }); pintarLineas(); pintar(); } }, '+ Producto'));
   }
   function pintar() {
@@ -455,7 +486,7 @@ function registrarVenta(e, C, r) {
   location.hash = '#/ventas';
 }
 function vVentas(app) {
-  app.append(h('a', { href: '#/mas' }, '← Más'), h('h2', {}, 'Ventas'));
+  app.append(volver('#/mas', 'Más'), h('h2', {}, 'Ventas'));
   const mes = hoy().slice(0, 7), act = S.ventas.filter(v => v.estado !== 'Cancelado');
   const delMes = act.filter(v => v.fecha.startsWith(mes)), gan = delMes.filter(v => v.ganancia != null);
   app.append(h('div', { class: 'kpis' }, kpi(pesos(delMes.reduce((a, v) => a + v.total, 0)), 'vendido este mes'), kpi(delMes.length, 'ventas este mes'),
