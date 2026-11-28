@@ -208,17 +208,38 @@ function vClaudio(app) {
   lista.slice(0, 40).forEach(a => app.append(tarjetaAviso(a)));
   if (lista.length > 40) app.append(h('p', { class: 'vacio' }, `Mostrando 40 de ${lista.length}. Resolvé los de arriba y aparecen los siguientes.`));
 }
+/* Claudio con IA: pide un borrador a la función de Supabase (solo cuando apretás el botón; nada se manda solo) */
+function botonIA(e, ta) {
+  if (!db || !CFG.url) return { boton: null, info: h('div') };
+  const info = h('div', { 'aria-live': 'polite' });
+  const boton = h('button', { class: 'sec', type: 'button', onclick: async () => {
+    boton.disabled = true; boton.replaceChildren(ico('sparkles', 18), ' Redactando…'); info.replaceChildren();
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      const r = await fetch(CFG.url + '/functions/v1/claudio-borrador', { method: 'POST', headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + session.access_token, apikey: CFG.key }, body: JSON.stringify({ empresa_id: e.id }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'Error ' + r.status);
+      if (j.borrador) ta.value = j.borrador;
+      info.replaceChildren(...[
+        j.derivar ? h('div', { class: 'banner warn', role: 'alert' }, ico('bell', 18), h('div', {}, CL().nombre + ' sugiere que lo resuelvas vos: ' + (j.motivo || 'tema sensible') + '. El borrador es solo de contención.')) : null,
+        j.razon ? h('small', {}, 'Por qué: ' + j.razon + (j.restantes != null ? ' · quedan ' + j.restantes + ' borradores hoy' : '')) : null].filter(Boolean));
+    } catch (err) { info.replaceChildren(h('div', { class: 'banner bad', role: 'alert' }, ico('ban', 18), h('div', {}, err.message))); }
+    boton.disabled = false; boton.replaceChildren(ico('sparkles', 18), ' Redactar con IA');
+  } }, ico('sparkles', 18), ' Redactar con IA');
+  return { boton, info };
+}
 const idAviso = a => 'av-' + a.key.replace(/[^a-z0-9]/gi, '_');
 function tarjetaAviso(a) {
   const e = POR_ID.get(a.emp), blq = e && bloqueada(e);
   const ta = h('textarea', { rows: 3 }, borrador(a));
+  const ia = e ? botonIA(e, ta) : { boton: null, info: h('div') };
   const canal = h('select', {}, ['whatsapp', 'instagram', 'facebook', 'mercadolibre', 'mail'].map(k => h('option', { value: k, selected: k === (e ? canalPara(e, a.canal) : 'whatsapp') }, CANALES[k][0])));
   const prio = h('select', { onchange: ev => { CL().prio[a.key] = +ev.target.value; claudioGuardar(a.key); toast('Prioridad corregida'); ruta(); } }, NOM_P.map((x, i) => h('option', { value: i, selected: i === a.p }, 'Prioridad: ' + x)));
   return h('div', { class: 'card aviso p' + a.p, id: idAviso(a) },
     h('div', { class: 'row' }, chipP(a.p), a.corregida && h('span', { class: 'chip' }, 'corregida'), h('small', { class: 'sp' }, `${a.tipo}${a.canal && CANALES[a.canal] ? ' · ' + CANALES[a.canal][0] : ''} · ${hace(a.fecha)}`)),
     e ? h('a', { class: 'item', href: '#/hilo/' + e.id }, h('b', {}, e.nombre)) : h('b', {}, a.texto), e && h('small', {}, [e.etapa, e.rubro, lugar(e)].filter(Boolean).join(' · ')),
     h('p', { class: 'razon' }, ico('sparkles', 18), h('span', {}, a.razon)), a.texto && a.tipo !== 'Seguimiento' && h('small', { class: 'cita' }, '“' + a.texto.slice(0, 160) + '”'),
-    e && !blq && h('div', {}, h('small', {}, 'Borrador de ' + CL().nombre + ' (editalo):'), ta, h('div', { class: 'row' }, canal,
+    e && !blq && h('div', {}, h('small', {}, 'Borrador de ' + CL().nombre + ' (editalo):'), ta, ia.info, h('div', { class: 'row' }, ia.boton, canal,
       h('button', { onclick: () => abrirCanal(e, canal.value, ta.value) }, 'Abrir y mandar'), h('button', { class: 'ok', onclick: () => { registrarEnvio(e, canal.value, ta.value, a.key); ruta(); } }, [ico('check', 18), ' Ya lo mandé']))),
     blq && h('div', { class: 'banner bad', role: 'alert' }, ico('ban', 20), h('div', {}, 'No contactar: ' + (e.no_contactar_motivo || ''))),
     h('div', { class: 'row' }, h('button', { class: 'sec', onclick: () => { resolver(a.key, 'hecho'); if (a.tarea) { a.tarea.hecha = true; guardar(); } ruta(); } }, 'Resuelto'),
@@ -298,7 +319,8 @@ function vHilo(app, id) {
   const ta = h('textarea', { rows: 3, placeholder: blq ? 'Bloqueado' : 'Escribí la respuesta', disabled: blq });
   const canal = h('select', { disabled: blq }, ['whatsapp', 'instagram', 'facebook', 'mercadolibre', 'mail'].map(k => h('option', { value: k, selected: k === canalPara(e, hl && hl.ult.canal) }, CANALES[k][0])));
   const plant = h('select', { disabled: blq, onchange: ev => { if (ev.target.value) ta.value = PLANTILLAS[ev.target.value]; ev.target.value = ''; } }, h('option', { value: '' }, 'Respuestas rápidas…'), Object.keys(PLANTILLAS).map(k => h('option', { value: k }, k)));
-  der.append(h('div', { class: 'card' }, ta, h('div', { class: 'row' }, plant, canal),
+  const iaH = blq ? { boton: null, info: h('div') } : botonIA(e, ta);
+  der.append(h('div', { class: 'card' }, ta, iaH.info, h('div', { class: 'row' }, iaH.boton, plant, canal),
     h('div', { class: 'row' }, h('button', { disabled: blq, onclick: () => abrirCanal(e, canal.value, ta.value) }, 'Abrir y mandar'),
       h('button', { class: 'ok', disabled: blq, onclick: () => { if (!ta.value.trim()) return; registrarEnvio(e, canal.value, ta.value, av && av.key); ruta(); } }, [ico('check', 18), ' Ya lo mandé'])),
     h('small', {}, 'Se abre la app del canal con el texto. Cuando se conecten los canales (Fase 2) se manda desde acá.')));

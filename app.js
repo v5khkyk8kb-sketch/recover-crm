@@ -155,7 +155,7 @@ function pantallaLogin(msg) {
     h('div', { class: 'card' }, h('b', {}, 'Con contraseña'), h('small', {}, 'La contraseña la definís en Supabase (Authentication → Users). Solo entran los mails autorizados.'), mail2, clave, h('button', { onclick: entrar }, 'Entrar')),
     h('div', { class: 'card' }, h('b', {}, 'Con link al mail'), h('small', {}, 'Supabase limita los mails gratis a unos pocos por hora: si dice "rate limit", esperá o usá la contraseña.'), mail,
       h('button', { class: 'sec', onclick: async () => {
-        const { error } = await db.auth.signInWithOtp({ email: mail.value.trim(), options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true } });
+        const { error } = await db.auth.signInWithOtp({ email: mail.value.trim(), options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: false } });
         toast(error ? 'Error: ' + error.message : 'Listo, revisá tu mail y tocá el link');
       } }, 'Mandarme el link')), ...(msg ? [h('p', { class: 'vacio' }, msg)] : []));
 }
